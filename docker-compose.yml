@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ragqa-postgres
+    environment:
+      POSTGRES_DB: ragqa
+      POSTGRES_USER: ragqa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strongpassword}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ragqa"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.14
+    container_name: milvus-etcd
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+    volumes:
+      - etcddata:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+
+  milvus-minio:
+    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
+    container_name: milvus-minio
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - miniodata:/minio_data
+    ports:
+      - "9001:9001"
+    command: minio server /minio_data
+
+  milvus:
+    image: milvusdb/milvus:v2.4.8
+    container_name: milvus-standalone
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+    depends_on:
+      - milvus-etcd
+      - milvus-minio
+    ports:
+      - "19530:19530"
+    volumes:
+      - milvusdata:/var/lib/milvus
+
+  vllm-llm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-llm
+    runtime: nvidia
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-hf_placeholder}
+    command: Qwen/Qwen2.5-3B-Instruct --dtype bfloat16 --max-model-len 4096 --gpu-memory-utilization 0.80 --enable-prefix-caching
+    ports:
+      - "8000:8000"
+    volumes:
+      - hfcache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  pgdata:
+  etcddata:
+  miniodata:
+  milvusdata:
+  hfcache:
+
