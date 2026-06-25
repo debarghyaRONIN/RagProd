@@ -123,10 +123,12 @@ export default function Sidebar() {
   const handleLogout = async () => {
     try {
       await api.post('/auth/logout');
+    } catch (err) {
+      console.error('Logout failed on backend, clearing locally:', err);
+    } finally {
+      await fetch('/api/auth/logout-local', { method: 'POST' }).catch(() => {});
       router.push('/login');
       router.refresh();
-    } catch (err) {
-      console.error('Logout failed:', err);
     }
   };
 

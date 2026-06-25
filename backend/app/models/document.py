@@ -13,6 +13,7 @@ class Document(Base):
     file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     mime_type: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="pending") # 'pending', 'processing', 'ready', 'failed'
+    progress: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     chunk_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(String, nullable=True)
     milvus_ids: Mapped[list | None] = mapped_column(JSON, nullable=True) # list of Milvus primary keys for cleanup

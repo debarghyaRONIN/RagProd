@@ -51,6 +51,18 @@ def parse_text(file_bytes: bytes) -> List[Tuple[int, str]]:
     text = file_bytes.decode("utf-8", errors="ignore")
     return [(1, text)]
 
+async def update_progress(doc_id: uuid.UUID, progress: int, status: str = "processing", error_message: str | None = None) -> None:
+    """Helper to update document status and progress in PostgreSQL."""
+    async with async_session_maker() as db:
+        result = await db.execute(select(Document).where(Document.id == doc_id))
+        db_doc = result.scalars().first()
+        if db_doc:
+            db_doc.progress = progress
+            db_doc.status = status
+            if error_message is not None:
+                db_doc.error_message = error_message
+            await db.commit()
+
 async def process_document_ingestion(
     doc_id: uuid.UUID,
     user_id: uuid.UUID,
@@ -60,19 +72,26 @@ async def process_document_ingestion(
 ) -> None:
     """
     Background worker task to parse, clean, chunk, embed, and load a document.
+    Now tracks and updates progress percentage in real time.
     """
+    # Fix event loop / connection pool lifecycle issues when running Celery in Windows solo mode
+    from app.database import engine
+    from app.milvus.client import connect_milvus, disconnect_milvus
+    
+    logger.info("disposing_sqlalchemy_pool_for_new_loop")
+    await engine.dispose()
+
+    logger.info("reconnecting_milvus_for_new_loop")
+    try:
+        disconnect_milvus()
+    except Exception:
+        pass
+    connect_milvus()
+
     logger.info("starting_document_ingestion", doc_id=str(doc_id), filename=filename)
     
-    # 1. Update status to 'processing' in PostgreSQL
-    async with async_session_maker() as db:
-        result = await db.execute(select(Document).where(Document.id == doc_id))
-        db_doc = result.scalars().first()
-        if not db_doc:
-            logger.error("ingestion_failed_document_not_found_in_db", doc_id=str(doc_id))
-            return
-        
-        db_doc.status = "processing"
-        await db.commit()
+    # 1. Update status to 'processing' and progress to 5%
+    await update_progress(doc_id, 5, "processing")
 
     try:
         # 2. Parse text based on mime type or file extension
@@ -91,7 +110,10 @@ async def process_document_ingestion(
         if not parsed_pages:
             raise Exception("No text content could be extracted from this document")
 
-        # 3. Clean and Split text chunk-by-chunk per page (to track sources accurately)
+        # Parsing complete, set progress to 25%
+        await update_progress(doc_id, 25)
+
+        # 3. Clean and Split text chunk-by-chunk per page
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.CHUNK_SIZE,
             chunk_overlap=settings.CHUNK_OVERLAP,
@@ -115,12 +137,36 @@ async def process_document_ingestion(
 
         logger.info("document_chunked", chunks_count=len(chunks_to_embed), doc_id=str(doc_id))
 
-        # 4. Batch embed text chunks
+        # Chunking complete, set progress to 35%
+        await update_progress(doc_id, 35)
+
+        # 4. Batch embed text chunks with incremental progress updates
         chunk_texts = [c["text"] for c in chunks_to_embed]
-        embeddings = await embed_texts(chunk_texts)
+        total_chunks = len(chunk_texts)
+        embeddings = []
+        
+        # Batch size for embedding progress updates
+        embed_batch_size = 32
+        total_batches = (total_chunks + embed_batch_size - 1) // embed_batch_size
+
+        for batch_idx in range(total_batches):
+            start_i = batch_idx * embed_batch_size
+            end_i = min(start_i + embed_batch_size, total_chunks)
+            batch_texts = chunk_texts[start_i:end_i]
+            
+            # Embed this batch
+            batch_embeddings = await embed_texts(batch_texts)
+            embeddings.extend(batch_embeddings)
+            
+            # Embedding progress scales from 35% to 85%
+            progress = 35 + int(((batch_idx + 1) / total_batches) * 50)
+            await update_progress(doc_id, progress)
         
         if len(embeddings) != len(chunks_to_embed):
             raise Exception(f"Mismatch in embeddings output size. Expected {len(chunks_to_embed)}, got {len(embeddings)}")
+
+        # Embedding complete, set progress to 90%
+        await update_progress(doc_id, 90)
 
         # 5. Insert vectors into Milvus
         milvus_data = []
@@ -156,12 +202,16 @@ async def process_document_ingestion(
             inserted_count=len(milvus_primary_keys)
         )
 
-        # 6. Update document in PostgreSQL status to 'ready'
+        # Milvus complete, set progress to 95%
+        await update_progress(doc_id, 95)
+
+        # 6. Update document in PostgreSQL status to 'ready' and progress to 100%
         async with async_session_maker() as db:
             result = await db.execute(select(Document).where(Document.id == doc_id))
             db_doc = result.scalars().first()
             if db_doc:
                 db_doc.status = "ready"
+                db_doc.progress = 100
                 db_doc.chunk_count = len(chunks_to_embed)
                 db_doc.milvus_ids = milvus_primary_keys # Save keys for delete cascade
                 await db.commit()
@@ -169,11 +219,6 @@ async def process_document_ingestion(
 
     except Exception as e:
         logger.error("document_ingestion_failed", doc_id=str(doc_id), error=str(e))
-        # Update document status to 'failed'
-        async with async_session_maker() as db:
-            result = await db.execute(select(Document).where(Document.id == doc_id))
-            db_doc = result.scalars().first()
-            if db_doc:
-                db_doc.status = "failed"
-                db_doc.error_message = str(e)
-                await db.commit()
+        # Update document status to 'failed' and keep/record progress at failure point
+        await update_progress(doc_id, progress=0, status="failed", error_message=str(e))
+
