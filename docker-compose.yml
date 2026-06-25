@@ -1,0 +1,170 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ragqa-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ragqa
+      POSTGRES_USER: ragqa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strongpassword}
+    ports:
+      # Bind to 127.0.0.1 to avoid exposing the database publicly on the host network
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ragqa"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.14
+    container_name: milvus-etcd
+    restart: unless-stopped
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+    volumes:
+      - etcddata:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  milvus-minio:
+    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
+    container_name: milvus-minio
+    restart: unless-stopped
+    environment:
+      # Credentials loaded from .env variables to avoid hardcoded credentials in the repository
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - miniodata:/minio_data
+    ports:
+      # Bind to 127.0.0.1 to secure the MinIO console port
+      - "127.0.0.1:9001:9001"
+    command: minio server /minio_data
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  milvus:
+    image: milvusdb/milvus:v2.4.8
+    container_name: milvus-standalone
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+    depends_on:
+      milvus-etcd:
+        condition: service_healthy
+      milvus-minio:
+        condition: service_healthy
+    ports:
+      # Bind to 127.0.0.1 to avoid exposing the vector database port publicly
+      - "127.0.0.1:19530:19530"
+    volumes:
+      - milvusdata:/var/lib/milvus
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  vllm-llm:
+    # Pin image to a specific tag instead of latest
+    image: vllm/vllm-openai:v0.6.1
+    container_name: vllm-llm
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+    command: Qwen/Qwen2.5-3B-Instruct --dtype bfloat16 --max-model-len 4096 --gpu-memory-utilization 0.80 --enable-prefix-caching
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - hfcache:/root/.cache/huggingface
+    networks:
+      - internal-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  backend:
+    build: ./backend
+    container_name: ragqa-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      # Override local environment settings with internal Docker service hostnames
+      - DATABASE_URL=postgresql+asyncpg://ragqa:${POSTGRES_PASSWORD:-strongpassword}@postgres:5432/ragqa
+      - MILVUS_HOST=milvus
+      - VLLM_BASE_URL=http://vllm-llm:8000/v1
+      - MOCK_VLLM=false
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-32-char-random-string-at-least-32-chars}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+      vllm-llm:
+        condition: service_healthy
+    networks:
+      - internal-net
+      - public-net
+
+  frontend:
+    build: ./frontend
+    container_name: ragqa-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Connect Next.js dynamic routing to the backend service container
+      - NEXT_PUBLIC_API_URL=http://backend:8080
+    depends_on:
+      - backend
+    networks:
+      - public-net
+
+networks:
+  # Internal network for databases and backend service API calls
+  internal-net:
+    driver: bridge
+  # Public network exposing only the frontend and backend port 8080 to the client
+  public-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  etcddata:
+  miniodata:
+  milvusdata:
+  hfcache:
