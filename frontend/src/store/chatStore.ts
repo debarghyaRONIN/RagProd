@@ -20,11 +20,13 @@ interface ChatStore {
   streamingMessage: string;
   isStreaming: boolean;
   streamingSources: any[] | null;
+  streamingError: string | null;
   fetchMessages: (sessionId: string) => Promise<void>;
   addMessage: (sessionId: string, msg: Message) => void;
   setStreamingState: (isStreaming: boolean) => void;
   appendStreamingToken: (token: string) => void;
   setStreamingSources: (sources: any[] | null) => void;
+  setStreamingError: (err: string | null) => void;
   clearStreamingState: () => void;
   finalizeStreaming: (sessionId: string, msg: Message) => void;
 
@@ -98,6 +100,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   streamingMessage: '',
   isStreaming: false,
   streamingSources: null,
+  streamingError: null,
 
   fetchMessages: async (sessionId) => {
     set({ messagesLoading: true });
@@ -135,8 +138,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setStreamingSources: (sources) => set({ streamingSources: sources }),
 
+  setStreamingError: (err) => set({ streamingError: err }),
+
   clearStreamingState: () => 
-    set({ streamingMessage: '', streamingSources: null, isStreaming: false }),
+    set({ streamingMessage: '', streamingSources: null, streamingError: null, isStreaming: false }),
 
   finalizeStreaming: (sessionId, msg) => {
     set((state) => {
@@ -146,6 +151,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         isStreaming: false,
         streamingMessage: '',
         streamingSources: null,
+        streamingError: null,
         messages: {
           ...state.messages,
           [sessionId]: [...list, msg],

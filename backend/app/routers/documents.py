@@ -136,7 +136,7 @@ async def delete_document(
             collection = get_collection()
             partition_name = get_user_partition_name(str(current_user.id))
             # Milvus delete expression using the list of primary keys
-            expr = f"id in {db_doc.milvus_ids}"
+            expr = f"id in [{', '.join(str(i) for i in db_doc.milvus_ids)}]"
             logger.info("deleting_vectors_from_milvus", doc_id=str(document_id), partition_name=partition_name, count=len(db_doc.milvus_ids))
             collection.delete(expr, partition_name=partition_name)
         except Exception as e:

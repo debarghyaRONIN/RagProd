@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy import select, update, delete, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,7 +57,7 @@ async def rename_chat_session(
     if not session:
         return None
     session.title = title
-    session.updated_at = datetime.now()
+    session.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(session)
     return session
@@ -98,7 +98,7 @@ async def create_chat_message(
     stmt = (
         update(Session)
         .where(Session.id == session_id)
-        .values(updated_at=datetime.now())
+        .values(updated_at=datetime.now(timezone.utc))
     )
     await db.execute(stmt)
     

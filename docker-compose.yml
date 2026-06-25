@@ -188,12 +188,25 @@ services:
     build: ./frontend
     container_name: ragqa-frontend
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     environment:
       # Connect Next.js dynamic routing to the backend service container
       - NEXT_PUBLIC_API_URL=http://backend:8080
     depends_on:
+      - backend
+    networks:
+      - public-net
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: ragqa-nginx
+    restart: unless-stopped
+    ports:
+      # Expose Nginx reverse proxy publicly on standard port 80
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
       - backend
     networks:
       - public-net

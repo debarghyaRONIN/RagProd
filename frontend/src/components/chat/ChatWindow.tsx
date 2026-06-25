@@ -10,17 +10,17 @@ interface ChatWindowProps {
 }
 
 export default function ChatWindow({ messages }: ChatWindowProps) {
-  const { isStreaming, streamingMessage, streamingSources, messagesLoading } = useChatStore();
+  const { isStreaming, streamingMessage, streamingSources, streamingError, messagesLoading } = useChatStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Scroll to bottom on initial load, new messages, or streaming tokens
+  // Scroll to bottom on initial load, new messages, streaming tokens, or errors
   useEffect(() => {
     scrollToBottom();
-  }, [messages.length, streamingMessage, isStreaming]);
+  }, [messages.length, streamingMessage, isStreaming, streamingError]);
 
   if (messagesLoading && messages.length === 0) {
     return (
@@ -60,6 +60,13 @@ export default function ChatWindow({ messages }: ChatWindowProps) {
                 }}
                 isStreaming={true}
               />
+            )}
+
+            {streamingError && (
+              <div className="mx-6 my-4 p-4 border border-red-900/50 bg-red-950/20 text-red-400 rounded-md text-xs font-mono flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                <span>Error: {streamingError}</span>
+              </div>
             )}
           </div>
         )}

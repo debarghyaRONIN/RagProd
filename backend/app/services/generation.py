@@ -121,7 +121,7 @@ async def stream_answer(
     headers = {
         "Content-Type": "application/json"
     }
-    if settings.HF_TOKEN and settings.HF_TOKEN != "hf_placeholder":
+    if settings.HF_TOKEN:
         headers["Authorization"] = f"Bearer {settings.HF_TOKEN}"
 
     payload = {

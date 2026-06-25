@@ -9,6 +9,7 @@ export function useSSE() {
     setStreamingState,
     appendStreamingToken,
     setStreamingSources,
+    setStreamingError,
     finalizeStreaming,
     clearStreamingState
   } = useChatStore();
@@ -114,8 +115,8 @@ export function useSSE() {
         console.log('RAG stream was manually aborted by the user.');
       } else {
         console.error('SSE Stream execution error:', err);
-        // Dispatch error event back to the store
-        appendStreamingToken(`\n\n*[Connection Error: ${err.message}]*`);
+        // Set error state in store instead of appending raw text to the token buffer
+        setStreamingError(err.message || 'Streaming connection failed');
         setStreamingState(false);
       }
     } finally {
@@ -127,6 +128,7 @@ export function useSSE() {
     setStreamingState,
     appendStreamingToken,
     setStreamingSources,
+    setStreamingError,
     finalizeStreaming
   ]);
 

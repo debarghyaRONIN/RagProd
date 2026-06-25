@@ -22,10 +22,18 @@ export default function UploadZone() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const activePolls = useRef<Set<string>>(new Set());
+  const intervalRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
+
+  // Clean up all status polling intervals on unmount to prevent leaks
+  useEffect(() => {
+    return () => {
+      intervalRefs.current.forEach((id) => clearInterval(id));
+    };
+  }, []);
 
   // Set up polling for documents that are in 'pending' or 'processing' status
   useEffect(() => {
@@ -55,14 +63,18 @@ export default function UploadZone() {
 
         if (data.status === 'ready' || data.status === 'failed') {
           clearInterval(intervalId);
+          intervalRefs.current.delete(docId);
           activePolls.current.delete(docId);
         }
       } catch (err) {
         console.error(`Error polling status for doc ${docId}:`, err);
         clearInterval(intervalId);
+        intervalRefs.current.delete(docId);
         activePolls.current.delete(docId);
       }
     }, 2000);
+
+    intervalRefs.current.set(docId, intervalId);
   };
 
   const handleDragOver = (e: React.DragEvent) => {

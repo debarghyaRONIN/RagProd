@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440 # 24 hours
     MOCK_VLLM: bool = False # Mock local vLLM if no GPU available
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     # PostgreSQL
     DATABASE_URL: str                      # asyncpg DSN (e.g., postgresql+asyncpg://...)
@@ -16,7 +17,7 @@ class Settings(BaseSettings):
     VLLM_BASE_URL: str = "http://localhost:8000/v1"
     LLM_MODEL_NAME: str = "Qwen/Qwen2.5-3B-Instruct"
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"
-    HF_TOKEN: str = "hf_placeholder"
+    HF_TOKEN: str | None = None
 
     # Milvus
     MILVUS_HOST: str = "localhost"

@@ -87,14 +87,9 @@ app = FastAPI(
 
 # CORS Middleware Configuration
 # Restrict allow_origins to localhost frontend by default as required
-allowed_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

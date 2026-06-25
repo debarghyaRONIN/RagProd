@@ -47,7 +47,14 @@ async def login(response: Response, body: UserLogin, db: AsyncSession = Depends(
     res = await db.execute(stmt)
     user = res.scalars().first()
 
-    if not user or not verify_password(body.password, user.hashed_pw):
+    # Pre-calculated dummy bcrypt hash to verify against if username is not found
+    dummy_hash = "$2b$12$N9qo8uLOqpGC12Z0U2R.TObb0N7.0Ym.XQf8qY5L2aG1N/pY0i4P."
+    hash_to_check = user.hashed_pw if user else dummy_hash
+    
+    # Always run verification to take same computation duration
+    pwd_ok = verify_password(body.password, hash_to_check)
+
+    if not user or not pwd_ok:
         raise CredentialsException("Incorrect username/email or password")
 
     if not user.is_active:
