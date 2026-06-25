@@ -19,19 +19,13 @@ variable "gpu_count" {
 variable "cloud_type" {
   type        = string
   description = "RunPod cloud type: SECURE or COMMUNITY"
-  default     = "COMMUNITY"
-}
-
-variable "volume_size" {
-  type        = number
-  description = "Size of persistent volume (GB) for model weight caching"
-  default     = 50
+  default     = "SECURE"
 }
 
 variable "container_disk_size" {
   type        = number
   description = "Ephemeral container disk space (GB)"
-  default     = 30
+  default     = 50 # Increase to 50GB to fit model weights safely in container ephemeral disk
 }
 
 variable "llm_model_name" {
@@ -45,10 +39,4 @@ variable "huggingface_token" {
   description = "HF Token for gated models (optional)"
   default     = ""
   sensitive   = true
-}
-
-variable "data_center_id" {
-  type        = string
-  description = "RunPod data center ID (must be the same for network volume and pod, e.g. US-CA-2)"
-  default     = "US-CA-2"
 }
