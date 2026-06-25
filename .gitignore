@@ -49,7 +49,7 @@ pip-delete-this-directory.txt
 *.gguf
 *.h5
 *.weights
-models/
+/models/
 huggingface/
 .cache/huggingface/
 
