@@ -11,7 +11,7 @@ from app.config import settings
 from app.database import async_session_maker
 from app.models.document import Document
 from app.services.embedding import embed_texts
-from app.milvus.schema import get_collection
+from app.milvus.schema import get_collection, get_user_partition_name
 import structlog
 
 logger = structlog.get_logger()
@@ -136,7 +136,15 @@ async def process_document_ingestion(
             })
 
         collection = get_collection()
-        insert_result = collection.insert(milvus_data)
+        partition_name = get_user_partition_name(str(user_id))
+        
+        # Check if the user partition exists, create if not
+        if not collection.has_partition(partition_name):
+            logger.info("creating_user_milvus_partition", partition_name=partition_name)
+            collection.create_partition(partition_name)
+            
+        # Insert vectors into user specific partition
+        insert_result = collection.insert(milvus_data, partition_name=partition_name)
         milvus_primary_keys = list(insert_result.primary_keys)
 
         # Ensure collection is loaded

@@ -54,14 +54,7 @@ async def lifespan(app: FastAPI):
     """Orchestrate start-up and shut-down lifespan events."""
     logger.info("starting_up_backend_services")
 
-    # 1. Initialize PostgreSQL tables
-    try:
-        async with engine.begin() as conn:
-            # Recreate tables if not exists
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("postgresql_tables_initialized_successfully")
-    except Exception as e:
-        logger.critical("postgresql_table_initialization_failed", error=str(e))
+    # PostgreSQL table initialization is now managed externally via Alembic migrations.
 
     # 2. Initialize Milvus Collection
     try:

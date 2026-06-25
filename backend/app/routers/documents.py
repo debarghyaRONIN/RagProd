@@ -1,6 +1,7 @@
 import uuid
+import base64
 from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File, BackgroundTasks, status
+from fastapi import APIRouter, Depends, UploadFile, File, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -9,8 +10,8 @@ from app.core.exceptions import BadRequestException, NotFoundException
 from app.models.user import User
 from app.models.document import Document
 from app.schemas.document import DocumentResponse, DocumentStatusResponse
-from app.services.ingestion import process_document_ingestion
-from app.milvus.schema import get_collection
+from app.tasks.ingestion import process_document_ingestion_task
+from app.milvus.schema import get_collection, get_user_partition_name
 import structlog
 
 logger = structlog.get_logger()
@@ -35,7 +36,6 @@ def detect_mime_type(data: bytes, upload_mime: str | None = None) -> str:
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -43,7 +43,7 @@ async def upload_document(
     """
     Upload a document (PDF, DOCX, TXT, MD).
     Performs server-side type checks and size validation (Max 50MB).
-    Launches chunking and embedding ingestion in the background.
+    Launches chunking and embedding ingestion in the background via Celery.
     """
     # 1. Size check
     file_bytes = await file.read()
@@ -81,13 +81,13 @@ async def upload_document(
     await db.commit()
     await db.refresh(db_doc)
 
-    # 4. Trigger ingestion background task
-    background_tasks.add_task(
-        process_document_ingestion,
-        doc_id=db_doc.id,
-        user_id=current_user.id,
+    # 4. Trigger ingestion background task via Celery
+    file_bytes_b64 = base64.b64encode(file_bytes).decode("utf-8")
+    process_document_ingestion_task.delay(
+        doc_id_str=str(db_doc.id),
+        user_id_str=str(current_user.id),
         filename=file.filename,
-        file_bytes=file_bytes,
+        file_bytes_b64=file_bytes_b64,
         mime_type=mime_type
     )
 
@@ -134,10 +134,11 @@ async def delete_document(
     if db_doc.milvus_ids:
         try:
             collection = get_collection()
+            partition_name = get_user_partition_name(str(current_user.id))
             # Milvus delete expression using the list of primary keys
             expr = f"id in {db_doc.milvus_ids}"
-            logger.info("deleting_vectors_from_milvus", doc_id=str(document_id), count=len(db_doc.milvus_ids))
-            collection.delete(expr)
+            logger.info("deleting_vectors_from_milvus", doc_id=str(document_id), partition_name=partition_name, count=len(db_doc.milvus_ids))
+            collection.delete(expr, partition_name=partition_name)
         except Exception as e:
             logger.error("milvus_vector_cleanup_failed", doc_id=str(document_id), error=str(e))
             # Proceed with PostgreSQL deletion anyway to prevent orphan entries in DB

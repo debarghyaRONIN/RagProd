@@ -6,6 +6,11 @@ logger = structlog.get_logger()
 
 COLLECTION_NAME = "rag_chunks"
 
+def get_user_partition_name(user_id: str) -> str:
+    """Translate user ID (including dashes) to a valid Milvus partition name."""
+    clean_id = str(user_id).replace("-", "")
+    return f"user_{clean_id}"
+
 def get_collection() -> Collection:
     """Return the pymilvus Collection instance."""
     return Collection(COLLECTION_NAME)

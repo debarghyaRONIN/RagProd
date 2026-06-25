@@ -1,6 +1,6 @@
 from typing import List
 from app.config import settings
-from app.milvus.schema import COLLECTION_NAME, get_collection
+from app.milvus.schema import COLLECTION_NAME, get_collection, get_user_partition_name
 from app.services.embedding import embed_texts
 from app.schemas.chat import RetrievedChunk
 import structlog
@@ -51,15 +51,23 @@ async def retrieve_chunks(
     # 3. Perform Milvus search
     try:
         collection = get_collection()
+        partition_name = get_user_partition_name(user_id)
+        
+        # If partition doesn't exist, user has uploaded no docs
+        if not collection.has_partition(partition_name):
+            logger.info("user_has_no_milvus_partition_returning_empty", user_id=user_id, partition_name=partition_name)
+            return []
+            
         search_params = {"metric_type": "COSINE", "params": {"ef": 128}}
         
-        logger.info("searching_milvus", expr=expr, top_k=top_k)
+        logger.info("searching_milvus", expr=expr, partition_name=partition_name, top_k=top_k)
         results = collection.search(
             data=[query_emb],
             anns_field="embedding",
             param=search_params,
             limit=top_k * 2, # fetch a bit extra for deduplication overhead
             expr=expr,
+            partition_names=[partition_name],
             output_fields=["doc_id", "user_id", "chunk_index", "text", "source_page", "filename"]
         )
     except Exception as e:

@@ -116,6 +116,21 @@ services:
       retries: 10
       start_period: 60s
 
+  redis:
+    image: redis:7-alpine
+    container_name: ragqa-redis
+    restart: unless-stopped
+    ports:
+      # Bind to 127.0.0.1 to avoid public exposure
+      - "127.0.0.1:6379:6379"
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
     container_name: ragqa-backend
@@ -129,6 +144,8 @@ services:
       - VLLM_BASE_URL=http://vllm-llm:8000/v1
       - MOCK_VLLM=false
       - SECRET_KEY=${SECRET_KEY:-change-me-to-a-32-char-random-string-at-least-32-chars}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,9 +153,36 @@ services:
         condition: service_healthy
       vllm-llm:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - internal-net
       - public-net
+
+  celery-worker:
+    build: ./backend
+    container_name: ragqa-celery-worker
+    restart: unless-stopped
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://ragqa:${POSTGRES_PASSWORD:-strongpassword}@postgres:5432/ragqa
+      - MILVUS_HOST=milvus
+      - VLLM_BASE_URL=http://vllm-llm:8000/v1
+      - MOCK_VLLM=false
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-32-char-random-string-at-least-32-chars}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+      vllm-llm:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal-net
 
   frontend:
     build: ./frontend
