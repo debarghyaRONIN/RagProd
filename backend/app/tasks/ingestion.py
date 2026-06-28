@@ -30,3 +30,11 @@ def process_document_ingestion_task(
         file_bytes=file_bytes,
         mime_type=mime_type
     ))
+
+@celery_app.task(name="app.tasks.ingestion.embed_texts_task")
+def embed_texts_task(texts: list[str]) -> list[list[float]]:
+    """Celery task to generate embeddings on the worker (which has torch/sentence-transformers)."""
+    from app.services.embedding import get_embedding_model, normalize_vector
+    model = get_embedding_model()
+    embeddings = model.encode(texts, batch_size=32, show_progress_bar=False)
+    return [normalize_vector(e.tolist()) for e in embeddings]

@@ -52,6 +52,7 @@ async def clean_stale_documents_periodically():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Orchestrate start-up and shut-down lifespan events."""
+    import os
     logger.info("starting_up_backend_services")
 
     # PostgreSQL table initialization is now managed externally via Alembic migrations.
@@ -64,17 +65,20 @@ async def lifespan(app: FastAPI):
         logger.error("milvus_collection_initialization_failed", error=str(e))
 
     # 3. Start periodic background cleanup task
-    cleanup_task = asyncio.create_task(clean_stale_documents_periodically())
+    cleanup_task = None
+    if not os.environ.get("VERCEL"):
+        cleanup_task = asyncio.create_task(clean_stale_documents_periodically())
 
     yield
 
     # 4. Shutdown: cancel task and close pymilvus connections
     logger.info("shutting_down_backend_services")
-    cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
+    if cleanup_task:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
     disconnect_milvus()
 
 # Instantiate FastAPI App
