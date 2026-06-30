@@ -3,7 +3,6 @@ import base64
 import uuid
 import structlog
 from app.tasks.celery_app import celery_app
-from app.services.ingestion import process_document_ingestion
 
 logger = structlog.get_logger()
 
@@ -16,6 +15,7 @@ def process_document_ingestion_task(
     mime_type: str
 ) -> None:
     """Celery task wrapper to process document text parsing, chunking, and embedding."""
+    from app.services.ingestion import process_document_ingestion
     logger.info("celery_received_ingestion_task", doc_id=doc_id_str, filename=filename)
     
     doc_id = uuid.UUID(doc_id_str)
