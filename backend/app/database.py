@@ -9,7 +9,8 @@ engine = create_async_engine(
     echo=settings.DEBUG,
     future=True,
     pool_pre_ping=True,
-    pool_recycle=1800
+    pool_recycle=1800,
+    connect_args={"prepared_statement_cache_size": 0}
 )
 
 # Create async session factory
