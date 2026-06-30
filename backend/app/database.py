@@ -10,7 +10,7 @@ engine = create_async_engine(
     future=True,
     pool_pre_ping=True,
     pool_recycle=1800,
-    connect_args={"prepared_statement_cache_size": 0}
+    connect_args={"statement_cache_size": 0}
 )
 
 # Create async session factory
