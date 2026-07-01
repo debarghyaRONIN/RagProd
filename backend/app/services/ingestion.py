@@ -74,18 +74,8 @@ async def process_document_ingestion(
     Background worker task to parse, clean, chunk, embed, and load a document.
     Now tracks and updates progress percentage in real time.
     """
-    # Fix event loop / connection pool lifecycle issues when running Celery in Windows solo mode
-    from app.database import engine
-    from app.milvus.client import connect_milvus, disconnect_milvus
-    
-    logger.info("disposing_sqlalchemy_pool_for_new_loop")
-    await engine.dispose()
-
-    logger.info("reconnecting_milvus_for_new_loop")
-    try:
-        disconnect_milvus()
-    except Exception:
-        pass
+    # Ensure Milvus is connected
+    from app.milvus.client import connect_milvus
     connect_milvus()
 
     logger.info("starting_document_ingestion", doc_id=str(doc_id), filename=filename)

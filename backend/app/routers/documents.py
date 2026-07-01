@@ -1,7 +1,7 @@
 import uuid
 import base64
 from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File, status
+from fastapi import APIRouter, Depends, UploadFile, File, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -36,6 +36,7 @@ def detect_mime_type(data: bytes, upload_mime: str | None = None) -> str:
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -43,7 +44,7 @@ async def upload_document(
     """
     Upload a document (PDF, DOCX, TXT, MD).
     Performs server-side type checks and size validation (Max 50MB).
-    Launches chunking and embedding ingestion in the background via Celery.
+    Launches chunking and embedding ingestion in the background.
     """
     # 1. Size check
     file_bytes = await file.read()
@@ -81,13 +82,14 @@ async def upload_document(
     await db.commit()
     await db.refresh(db_doc)
 
-    # 4. Trigger ingestion background task via Celery
-    file_bytes_b64 = base64.b64encode(file_bytes).decode("utf-8")
-    process_document_ingestion_task.delay(
-        doc_id_str=str(db_doc.id),
-        user_id_str=str(current_user.id),
+    # 4. Trigger ingestion background task locally to avoid sqlite locks
+    from app.services.ingestion import process_document_ingestion
+    background_tasks.add_task(
+        process_document_ingestion,
+        doc_id=db_doc.id,
+        user_id=current_user.id,
         filename=file.filename,
-        file_bytes_b64=file_bytes_b64,
+        file_bytes=file_bytes,
         mime_type=mime_type
     )
 
