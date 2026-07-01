@@ -95,7 +95,7 @@ services:
     runtime: nvidia
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
-    command: Qwen/Qwen2.5-3B-Instruct --dtype bfloat16 --max-model-len 4096 --gpu-memory-utilization 0.80 --enable-prefix-caching
+    command: --model Qwen/Qwen2.5-3B-Instruct --dtype bfloat16 --max-model-len 4096 --gpu-memory-utilization 0.80 --enable-prefix-caching
     ports:
       - "127.0.0.1:8000:8000"
     volumes:

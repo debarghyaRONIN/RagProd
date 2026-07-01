@@ -10,6 +10,7 @@ class DocumentResponse(BaseModel):
     file_size: Optional[int] = None
     mime_type: Optional[str] = None
     status: str
+    progress: int
     chunk_count: Optional[int] = None
     error_message: Optional[str] = None
     created_at: datetime
@@ -21,5 +22,6 @@ class DocumentResponse(BaseModel):
 class DocumentStatusResponse(BaseModel):
     id: uuid.UUID
     status: str
+    progress: int
     chunk_count: Optional[int] = None
     error_message: Optional[str] = None

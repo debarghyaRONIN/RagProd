@@ -15,11 +15,17 @@ def connect_milvus() -> None:
             logger.info("milvus_connection_already_exists")
             return
             
-        connections.connect(
-            alias="default",
-            host=settings.MILVUS_HOST,
-            port=settings.MILVUS_PORT
-        )
+        if settings.MILVUS_HOST.endswith(".db"):
+            connections.connect(
+                alias="default",
+                uri=settings.MILVUS_HOST
+            )
+        else:
+            connections.connect(
+                alias="default",
+                host=settings.MILVUS_HOST,
+                port=settings.MILVUS_PORT
+            )
         logger.info(
             "milvus_connected_successfully",
             host=settings.MILVUS_HOST,
@@ -42,7 +48,10 @@ def check_milvus_health() -> bool:
     """Check if the Milvus service is active and responsive."""
     try:
         if not connections.has_connection("default"):
-            connections.connect(alias="default", host=settings.MILVUS_HOST, port=settings.MILVUS_PORT)
+            if settings.MILVUS_HOST.endswith(".db"):
+                connections.connect(alias="default", uri=settings.MILVUS_HOST)
+            else:
+                connections.connect(alias="default", host=settings.MILVUS_HOST, port=settings.MILVUS_PORT)
         
         # Test command (e.g. list collections or check server version)
         utility.list_collections()

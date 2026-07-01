@@ -54,10 +54,16 @@ export default function UploadZone() {
       try {
         const data = await api.get(`/documents/${docId}/status`);
         
-        // Update document status in state
+        // Update document status and progress in state
         setDocuments(
           useChatStore.getState().documents.map((d) => 
-            d.id === docId ? { ...d, status: data.status, chunk_count: data.chunk_count, error_message: data.error_message } : d
+            d.id === docId ? { 
+              ...d, 
+              status: data.status, 
+              progress: data.progress, 
+              chunk_count: data.chunk_count, 
+              error_message: data.error_message 
+            } : d
           )
         );
 
@@ -208,61 +214,73 @@ export default function UploadZone() {
         ) : (
           <div className="flex flex-col border border-border rounded-lg divide-y divide-border overflow-hidden bg-zinc-950/10">
             {documents.map((doc) => (
-              <div key={doc.id} className="p-4 flex items-center justify-between text-sm hover:bg-zinc-900/10 transition">
-                <div className="flex items-center gap-3 min-w-0 pr-8">
-                  <FileText className="text-muted-foreground shrink-0" size={18} />
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-medium truncate">{doc.filename}</span>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                      <span>{formatSize(doc.file_size)}</span>
-                      <span>•</span>
-                      <span>{new Date(doc.created_at).toLocaleDateString()}</span>
-                      {doc.chunk_count && (
-                        <>
-                          <span>•</span>
-                          <span className="font-mono">{doc.chunk_count} chunks</span>
-                        </>
-                      )}
+              <div key={doc.id} className="p-4 flex flex-col gap-2.5 hover:bg-zinc-900/10 transition">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-3 min-w-0 pr-8">
+                    <FileText className="text-muted-foreground shrink-0" size={18} />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-medium truncate">{doc.filename}</span>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                        <span>{formatSize(doc.file_size)}</span>
+                        <span>•</span>
+                        <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                        {doc.chunk_count && (
+                          <>
+                            <span>•</span>
+                            <span className="font-mono">{doc.chunk_count} chunks</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-4">
-                  {/* Status Indicator */}
-                  <div className="flex items-center gap-1.5">
-                    {doc.status === 'pending' && (
-                      <span className="flex items-center gap-1 text-xs text-amber-500 font-mono">
-                        <Clock size={12} className="animate-pulse" /> pending
-                      </span>
-                    )}
-                    {doc.status === 'processing' && (
-                      <span className="flex items-center gap-1 text-xs text-blue-500 font-mono">
-                        <Loader2 size={12} className="animate-spin" /> indexing
-                      </span>
-                    )}
-                    {doc.status === 'ready' && (
-                      <span className="flex items-center gap-1 text-xs text-emerald-500 font-mono">
-                        <CheckCircle2 size={12} /> ready
-                      </span>
-                    )}
-                    {doc.status === 'failed' && (
-                      <span 
-                        className="flex items-center gap-1 text-xs text-red-500 font-mono cursor-help"
-                        title={doc.error_message || 'Indexing failed'}
-                      >
-                        <AlertCircle size={12} /> failed
-                      </span>
-                    )}
+                  <div className="flex items-center gap-4">
+                    {/* Status Indicator */}
+                    <div className="flex items-center gap-1.5">
+                      {doc.status === 'pending' && (
+                        <span className="flex items-center gap-1 text-xs text-amber-500 font-mono">
+                          <Clock size={12} className="animate-pulse" /> pending ({doc.progress || 0}%)
+                        </span>
+                      )}
+                      {doc.status === 'processing' && (
+                        <span className="flex items-center gap-1 text-xs text-blue-500 font-mono">
+                          <Loader2 size={12} className="animate-spin" /> indexing ({doc.progress || 0}%)
+                        </span>
+                      )}
+                      {doc.status === 'ready' && (
+                        <span className="flex items-center gap-1 text-xs text-emerald-500 font-mono">
+                          <CheckCircle2 size={12} /> ready
+                        </span>
+                      )}
+                      {doc.status === 'failed' && (
+                        <span 
+                          className="flex items-center gap-1 text-xs text-red-500 font-mono cursor-help"
+                          title={doc.error_message || 'Indexing failed'}
+                        >
+                          <AlertCircle size={12} /> failed
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => handleDelete(doc.id)}
+                      className="p-2 hover:bg-zinc-900 hover:text-destructive rounded-md text-muted-foreground transition"
+                      title="Delete document"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-
-                  <button
-                    onClick={() => handleDelete(doc.id)}
-                    className="p-2 hover:bg-zinc-900 hover:text-destructive rounded-md text-muted-foreground transition"
-                    title="Delete document"
-                  >
-                    <Trash2 size={14} />
-                  </button>
                 </div>
+
+                {/* Micro-animated Ingestion Progress Bar */}
+                {(doc.status === 'pending' || doc.status === 'processing') && (
+                  <div className="w-full bg-zinc-900 rounded-full h-1 overflow-hidden border border-zinc-800/40">
+                    <div 
+                      className="bg-blue-500 h-full rounded-full transition-all duration-500 ease-out" 
+                      style={{ width: `${doc.progress || 0}%` }}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>

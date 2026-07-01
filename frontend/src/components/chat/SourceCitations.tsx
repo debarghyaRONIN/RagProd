@@ -28,7 +28,7 @@ export default function SourceCitations({ sources }: SourceCitationsProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
           {sources.map((src, idx) => (
             <div
-              key={src.id || idx}
+              key={`${src.id || 'chunk'}-${idx}`}
               onClick={() => setActiveChunk(src)}
               className="p-2.5 border border-border bg-zinc-950/40 hover:bg-zinc-900/30 rounded-md cursor-pointer flex flex-col gap-1.5 min-w-0 transition hover:border-zinc-700"
             >

@@ -2,17 +2,17 @@ import math
 import asyncio
 from app.config import settings
 import structlog
-from sentence_transformers import SentenceTransformer
-import torch
 
 logger = structlog.get_logger()
 
 _model = None
 
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model() -> "SentenceTransformer":
     """Lazily load the SentenceTransformer model on the appropriate device."""
     global _model
     if _model is None:
+        from sentence_transformers import SentenceTransformer
+        import torch
         logger.info("loading_sentence_transformer_model", model=settings.EMBEDDING_MODEL_NAME)
         # Choose GPU if available, else fallback to CPU
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -36,6 +36,13 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     """
     if not texts:
         return []
+
+    import os
+    if os.environ.get("VERCEL", "false").lower() == "true":
+        from app.tasks.ingestion import embed_texts_task
+        logger.info("delegating_embeddings_to_celery_worker_from_vercel", count=len(texts))
+        task = embed_texts_task.delay(texts)
+        return await asyncio.to_thread(task.get, timeout=10.0)
 
     if settings.MOCK_VLLM:
         logger.info("generating_mock_embeddings", count=len(texts))
