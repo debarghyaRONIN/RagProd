@@ -58,6 +58,20 @@ export default function ChatSessionPage() {
     fetchDocuments();
   }, [sessionId, fetchMessages, fetchDocuments]);
 
+  // Poll documents list if any document is currently indexing
+  useEffect(() => {
+    const hasUnfinished = documents.some(
+      (d) => d.status === 'pending' || d.status === 'processing'
+    );
+    if (!hasUnfinished) return;
+
+    const intervalId = setInterval(() => {
+      fetchDocuments();
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [documents, fetchDocuments]);
+
   // Close dropdown on click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
