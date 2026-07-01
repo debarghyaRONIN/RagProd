@@ -3,7 +3,6 @@ import base64
 import uuid
 import structlog
 from app.tasks.celery_app import celery_app
-from app.services.ingestion import process_document_ingestion
 
 logger = structlog.get_logger()
 
@@ -16,6 +15,7 @@ def process_document_ingestion_task(
     mime_type: str
 ) -> None:
     """Celery task wrapper to process document text parsing, chunking, and embedding."""
+    from app.services.ingestion import process_document_ingestion
     logger.info("celery_received_ingestion_task", doc_id=doc_id_str, filename=filename)
     
     doc_id = uuid.UUID(doc_id_str)
@@ -30,3 +30,11 @@ def process_document_ingestion_task(
         file_bytes=file_bytes,
         mime_type=mime_type
     ))
+
+@celery_app.task(name="app.tasks.ingestion.embed_texts_task")
+def embed_texts_task(texts: list[str]) -> list[list[float]]:
+    """Celery task to generate embeddings on the worker (which has torch/sentence-transformers)."""
+    from app.services.embedding import get_embedding_model, normalize_vector
+    model = get_embedding_model()
+    embeddings = model.encode(texts, batch_size=32, show_progress_bar=False)
+    return [normalize_vector(e.tolist()) for e in embeddings]

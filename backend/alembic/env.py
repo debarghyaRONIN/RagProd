@@ -25,8 +25,11 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Dynamically set the database connection URL from Settings config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Dynamically set the database connection URL from Settings config (supporting direct URL for migrations)
+database_url = os.environ.get("DIRECT_URL") or settings.DATABASE_URL
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+config.set_main_option("sqlalchemy.url", database_url)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
