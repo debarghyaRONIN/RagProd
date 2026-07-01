@@ -38,8 +38,6 @@ async function handleProxy(
       method,
       headers,
       body,
-      // @ts-ignore
-      duplex: 'half', // Required for passing req.body stream
       cache: 'no-store'
     });
 
