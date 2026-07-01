@@ -19,7 +19,7 @@ async function handleProxy(
   // Exclude bodies for GET and HEAD requests
   let body: any = null;
   if (!['GET', 'HEAD'].includes(method)) {
-    body = req.body; // Pass the stream body directly to preserve performance/streaming uploads
+    body = await req.arrayBuffer();
   }
 
   // Copy and clean request headers
