@@ -1,17 +1,19 @@
-output "pod_id" {
+output "vllm_pod_id" {
   value       = runpod_pod.vllm_llm.id
-  description = "The ID of the provisioned RunPod GPU pod"
+  description = "The ID of the provisioned RunPod vLLM GPU pod"
 }
 
-output "pod_ip" {
-  value       = runpod_pod.vllm_llm.public_ip
-  description = "The public IP address of the GPU pod"
+output "backend_pod_id" {
+  value       = runpod_pod.backend_stack.id
+  description = "The ID of the provisioned RunPod Backend GPU pod"
 }
 
-output "vllm_connection_details" {
-  value = {
-    direct_ip_url    = "http://${runpod_pod.vllm_llm.public_ip}:8000/v1"
-    runpod_proxy_url = "https://${runpod_pod.vllm_llm.id}-8000.proxy.runpod.net/v1"
-  }
-  description = "vLLM connection URLs to copy-paste into your backend .env file (VLLM_BASE_URL)"
+output "backend_proxy_url" {
+  value       = "https://${runpod_pod.backend_stack.id}-8080.proxy.runpod.net"
+  description = "The FastAPI Backend URL to set in NEXT_PUBLIC_API_URL on Vercel"
+}
+
+output "vllm_proxy_url" {
+  value       = "https://${runpod_pod.vllm_llm.id}-8000.proxy.runpod.net/v1"
+  description = "The OpenAI-compatible vLLM endpoint URL"
 }
