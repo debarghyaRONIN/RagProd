@@ -41,9 +41,13 @@ async function handleProxy(
       cache: 'no-store'
     });
 
-    // Copy backend headers to client response
+    // Copy backend headers to client response, skipping headers we modify/decode
     const resHeaders = new Headers();
     response.headers.forEach((value, key) => {
+      const lowerKey = key.toLowerCase();
+      if (['content-encoding', 'content-length', 'transfer-encoding'].includes(lowerKey)) {
+        return;
+      }
       resHeaders.set(key, value);
     });
 
